@@ -1,0 +1,46 @@
+status-default-path = Default path: { $path }. Click Start to begin.
+status-add-paths = Add one or more folders, files or enter paths manually to scan.
+summary-no-results = No scan results
+hover-hint = Hover over the chart to see details
+status-paths-selected = Selected { $count } paths to scan.
+status-paths-manual = Path list now contains { $count } paths.
+status-paths-empty = Path list is empty.
+status-paths-remaining = { $count } paths remaining to scan.
+status-paths-cleared = Path list cleared.
+status-add-one-path = Please add at least one path first.
+status-scanning = Scanned { $count } files
+status-scanning-progress = Scanning in progress
+status-scan-done = Scan complete. Scanned { $count } files.
+status-scan-canceled = Scan canceled. Scanned { $count } files.
+status-view = View: { $path }
+status-view-root = View: (root)
+status-opening = Opening: { $path }
+status-opening-parent = Opening parent: { $path }
+status-open-failed = Failed to open: { $error }
+summary-total = Total: { $size } | files: { $files } | folders: { $folders } | warnings: { $warnings } | entries: { $entries }
+summary-total-partial = Total: { $size } | files: { $files } | folders: { $folders } | warnings: { $warnings } | entries: { $entries } | partial result
+
+ui-sources = Scan Sources
+ui-hide = Hide ▲
+ui-show = Show ▼
+ui-add-folders = 📁 Folders
+ui-add-files = 📄 Files
+ui-paste-paths = Paste paths:
+ui-add = Add
+ui-clear = Clear
+ui-selected = Selected
+ui-empty = (empty)
+ui-start = Start
+ui-stop = Stop
+ui-visualization = Visualization
+ui-treemap-desc = Rectangles: larger = more space
+ui-top-files = Top files
+ui-after-scan = After scan
+ui-open = Open
+ui-open-parent = Open parent
+ui-scanning = Scanning...
+ui-color-legend = Color legend below
+ui-mode-scanning = Scanning
+ui-mode-results = Results ready
+ui-mode-waiting = Ready
+

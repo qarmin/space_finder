@@ -1,0 +1,6 @@
+/target
+slint
+krokiet
+.idea
+*.gz
+binaries

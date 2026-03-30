@@ -1,0 +1,561 @@
+import {
+    Button,
+    HorizontalBox,
+    ListView,
+    ScrollView,
+    TextEdit,
+    VerticalBox,
+} from "std-widgets.slint";
+export struct ScanPathRow {
+    path: string,
+    kind_label: string,
+}
+export struct TopEntryRow {
+    name: string,
+    path: string,
+    size_label: string,
+    meta: string,
+}
+component LegendBadge inherits Rectangle {
+    in property <string> label;
+    in property <brush> swatch-color;
+    height: 26px;
+    border-radius: 8px;
+    background: #202938;
+    border-width: 1px;
+    border-color: #2d3a4f;
+    HorizontalBox {
+        padding-left: 8px;
+        padding-right: 8px;
+        spacing: 8px;
+        Rectangle {
+            width: 10px;
+            height: 10px;
+            border-radius: 5px;
+            background: root.swatch-color;
+            vertical-stretch: 0;
+        }
+        Text {
+            text: root.label;
+            color: #dce7f5;
+            vertical-alignment: center;
+            font-size: 12px;
+        }
+    }
+}
+export component MainWindow inherits Window {
+    title: "Space Finder";
+    preferred-width: 1540px;
+    preferred-height: 960px;
+    min-width: 1180px;
+    min-height: 760px;
+    background: #121722;
+    in-out property <[ScanPathRow]> scan-paths: [];
+    in-out property <[TopEntryRow]> top-entries: [];
+    in-out property <image> chart-image;
+    in-out property <string> manual-paths;
+    in-out property <string> status-text: "";
+    in-out property <string> summary-text: "";
+    in-out property <string> chart-hover-text: "Najedz kursorem na wykres, aby zobaczyc szczegoly";
+    in-out property <string> chart-hover-path: "";
+    in-out property <bool> scanning: false;
+    in-out property <bool> has-results: false;
+    in-out property <bool> context-menu-visible: false;
+    in-out property <length> context-menu-x: 0px;
+    in-out property <length> context-menu-y: 0px;
+    in-out property <string> context-menu-title: "";
+    in-out property <bool> top-entries-visible: false;
+    in-out property <bool> sources-visible: false;
+    callback toggle-sources-requested();
+    in-out property <brush> audio-color: #f0ca57;
+    in-out property <brush> video-color: #e45758;
+    in-out property <brush> image-color: #ae6ef7;
+    in-out property <brush> archive-color: #e0974e;
+    in-out property <brush> document-color: #54a0ff;
+    in-out property <brush> code-color: #48c9b0;
+    in-out property <brush> disk-image-color: #4cc9f0;
+    in-out property <brush> binary-color: #787eff;
+    in-out property <brush> folder-color: #697387;
+    in-out property <brush> other-color: #8d99ae;
+    callback add-folders-requested();
+    callback add-files-requested();
+    callback apply-manual-paths(string);
+    callback remove-path-requested(int);
+    callback clear-paths-requested();
+    callback start-scan-requested();
+    callback stop-scan-requested();
+    callback chart-hovered(length, length);
+    callback chart-left-clicked(length, length);
+    callback chart-right-clicked(length, length);
+    callback chart-double-clicked(length, length);
+    callback chart-area-resized(length, length);
+    callback open-item-requested(bool);
+    callback close-context-menu-requested();
+    callback chart-scroll-up();
+    callback chart-scroll-down();
+
+    // Translation properties — set from Rust via set_ui_translations()
+    in-out property <string> tr-sources: "Scan Sources";
+    in-out property <string> tr-hide: "Hide ▲";
+    in-out property <string> tr-show: "Show ▼";
+    in-out property <string> tr-add-folders: "📁 Folders";
+    in-out property <string> tr-add-files: "📄 Files";
+    in-out property <string> tr-paste-paths: "Paste paths:";
+    in-out property <string> tr-add: "Add";
+    in-out property <string> tr-clear: "Clear";
+    in-out property <string> tr-selected: "Selected";
+    in-out property <string> tr-empty: "(empty)";
+    in-out property <string> tr-start: "Start";
+    in-out property <string> tr-stop: "Stop";
+    in-out property <string> tr-visualization: "Visualization";
+    in-out property <string> tr-treemap-desc: "Rectangles: larger = more space";
+    in-out property <string> tr-top-files: "Top files";
+    in-out property <string> tr-after-scan: "After scan";
+    in-out property <string> tr-open: "Open";
+    in-out property <string> tr-open-parent: "Open parent";
+    in-out property <string> tr-scanning: "Scanning...";
+    in-out property <string> tr-color-legend: "Color legend below";
+    in-out property <string> tr-mode-scanning: "Scanning";
+    in-out property <string> tr-mode-results: "Results ready";
+    in-out property <string> tr-mode-waiting: "Ready";
+
+    VerticalBox {
+        padding: 14px;
+        spacing: 12px;
+        HorizontalBox {
+            spacing: 8px;
+            Rectangle {
+                width: 280px;
+                border-radius: 12px;
+                background: #171d28;
+                border-width: 1px;
+                border-color: #293246;
+                VerticalBox {
+                    padding: 10px;
+                    spacing: 8px;
+                    Text {
+                        text: "Space Finder";
+                        color: white;
+                        font-size: 18px;
+                        font-weight: 700;
+                    }
+                    Rectangle {
+                        border-radius: 8px;
+                        background: #111722;
+                        border-width: 1px;
+                        border-color: #243042;
+                        VerticalBox {
+                            padding: 8px;
+                            spacing: 2px;
+                            Text {
+                                text: root.status-text;
+                                color: #c7d2e1;
+                                wrap: word-wrap;
+                                font-size: 13px;
+                            }
+                            Text {
+                                text: root.summary-text;
+                                color: #eff6ff;
+                                wrap: word-wrap;
+                                font-size: 13px;
+                            }
+                            Text {
+                                text: root.scanning ? root.tr-mode-scanning : (root.has-results ? root.tr-mode-results : root.tr-mode-waiting);
+                                color: root.scanning ? #fcd34d : #7dd3fc;
+                                font-size: 12px;
+                            }
+                        }
+                    }
+                    HorizontalBox {
+                        spacing: 6px;
+                        vertical-stretch: 0;
+                        Text {
+                            text: root.tr-sources;
+                            color: white;
+                            font-size: 15px;
+                            font-weight: 600;
+                            vertical-alignment: center;
+                        }
+                        Rectangle { horizontal-stretch: 1; }
+                        Button {
+                            text: root.sources-visible ? root.tr-hide : root.tr-show;
+                            clicked => { root.toggle-sources-requested(); }
+                        }
+                    }
+                    if (root.sources-visible): Rectangle {
+                        border-radius: 8px;
+                        background: #0d1117;
+                        border-width: 1px;
+                        border-color: #1f2937;
+                        VerticalBox {
+                            padding: 8px;
+                            spacing: 6px;
+                            HorizontalBox {
+                                spacing: 4px;
+                                Button {
+                                    text: root.tr-add-folders;
+                                    enabled: !root.scanning;
+                                    clicked => { root.add-folders-requested(); }
+                                }
+                                Button {
+                                    text: root.tr-add-files;
+                                    enabled: !root.scanning;
+                                    clicked => { root.add-files-requested(); }
+                                }
+                            }
+                            Text {
+                                text: root.tr-paste-paths;
+                                color: #d5dde8;
+                                font-size: 12px;
+                            }
+                            TextEdit {
+                                text <=> root.manual-paths;
+                                enabled: !root.scanning;
+                                height: 60px;
+                            }
+                            HorizontalBox {
+                                spacing: 4px;
+                                Button {
+                                    text: root.tr-add;
+                                    enabled: !root.scanning && root.manual-paths != "";
+                                    clicked => {
+                                        root.apply-manual-paths(root.manual-paths);
+                                    }
+                                }
+                                Button {
+                                    text: root.tr-clear;
+                                    enabled: !root.scanning && root.scan-paths.length > 0;
+                                    clicked => { root.clear-paths-requested(); }
+                                }
+                            }
+                            Text {
+                                text: root.tr-selected + " (" + root.scan-paths.length + "):";
+                                color: white;
+                                font-size: 12px;
+                                font-weight: 600;
+                            }
+                            Rectangle {
+                                border-radius: 6px;
+                                background: #111722;
+                                border-width: 1px;
+                                border-color: #243042;
+                                height: 120px;
+                                if (root.scan-paths.length > 0): ListView {
+                                    for path[idx] in root.scan-paths: Rectangle {
+                                        height: 32px;
+                                        background: Math.mod(idx, 2) == 0 ? #18202d : #141b27;
+                                        HorizontalBox {
+                                            padding-left: 6px;
+                                            padding-right: 6px;
+                                            padding-top: 4px;
+                                            padding-bottom: 4px;
+                                            spacing: 4px;
+                                            Rectangle {
+                                                width: 36px;
+                                                border-radius: 4px;
+                                                background: #243247;
+                                                Text {
+                                                    text: path.kind_label;
+                                                    color: #dbeafe;
+                                                    horizontal-alignment: center;
+                                                    vertical-alignment: center;
+                                                    font-size: 11px;
+                                                }
+                                            }
+                                            Text {
+                                                text: path.path;
+                                                color: white;
+                                                vertical-alignment: center;
+                                                wrap: no-wrap;
+                                                overflow: elide;
+                                                horizontal-stretch: 1;
+                                                font-size: 12px;
+                                            }
+                                            Button {
+                                                text: "✕";
+                                                enabled: !root.scanning;
+                                                clicked => { root.remove-path-requested(idx); }
+                                            }
+                                        }
+                                    }
+                                }
+                                if (root.scan-paths.length == 0): Text {
+                                    text: root.tr-empty;
+                                    color: #8fa3bf;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                    font-size: 12px;
+                                }
+                            }
+                        }
+                    }
+                    Rectangle { vertical-stretch: 1; }
+                    HorizontalBox {
+                        spacing: 4px;
+                        vertical-stretch: 0;
+                        Button {
+                            text: root.scanning ? root.tr-stop : root.tr-start;
+                            enabled: root.scanning || root.scan-paths.length > 0;
+                            clicked => {
+                                if (root.scanning) {
+                                    root.stop-scan-requested();
+                                } else {
+                                    root.start-scan-requested();
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            Rectangle {
+                border-radius: 12px;
+                background: #171d28;
+                border-width: 1px;
+                border-color: #293246;
+                horizontal-stretch: 1;
+                VerticalBox {
+                    padding: 10px;
+                    spacing: 6px;
+                    HorizontalBox {
+                        spacing: 6px;
+                        Text {
+                            text: root.tr-visualization;
+                            color: white;
+                            font-size: 16px;
+                            font-weight: 650;
+                        }
+                        Rectangle { }
+                    }
+                    Text {
+                        text: root.tr-treemap-desc;
+                        color: #c8d2df;
+                        wrap: word-wrap;
+                        font-size: 12px;
+                    }
+                    Rectangle {
+                        height: 44px;
+                        vertical-stretch: 0;
+                        clip: true;
+                        Rectangle {
+                            y: 2px;
+                            height: 22px;
+                            width: parent.width;
+                            Text {
+                                y: 2px;
+                                height: 22px;
+                                width: parent.width;
+                                text: root.chart-hover-text;
+                                color: #f9fafb;
+                                overflow: elide;
+                                wrap: no-wrap;
+                                vertical-alignment: center;
+                                font-size: 13px;
+                            }
+                        }
+                        Rectangle {
+                            y: 25px;
+                            height: 18px;
+                            width: parent.width;
+                            Text {
+                                y: 25px;
+                                height: 18px;
+                                width: parent.width;
+                                text: root.chart-hover-path;
+                                color: #7dd3fc;
+                                overflow: elide;
+                                wrap: no-wrap;
+                                vertical-alignment: center;
+                                font-size: 12px;
+                            }
+                        }
+                    }
+                    chart-canvas := Rectangle {
+                        horizontal-stretch: 1;
+                        vertical-stretch: 1;
+                        border-radius: 8px;
+                        background: #0f1520;
+                        border-width: 1px;
+                        border-color: #243042;
+                        clip: true;
+                        changed width => {
+                            root.chart-area-resized(self.width, self.height);
+                        }
+                        changed height => {
+                            root.chart-area-resized(self.width, self.height);
+                        }
+                        if (root.has-results): Image {
+                            width: parent.width;
+                            height: parent.height;
+                            source: root.chart-image;
+                            image-fit: fill;
+                        }
+                        if (!root.has-results): Text {
+                            text: root.scanning ? root.tr-scanning : root.tr-color-legend;
+                            color: #8fa3bf;
+                            wrap: word-wrap;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                            font-size: 13px;
+                        }
+                        chart-touch := TouchArea {
+                            moved => { root.chart-hovered(self.mouse-x, self.mouse-y); }
+                            clicked => { root.chart-left-clicked(self.mouse-x, self.mouse-y); }
+                            double-clicked => { root.chart-double-clicked(self.mouse-x, self.mouse-y); }
+                            pointer-event(event) => {
+                                if (event.button == PointerEventButton.right && event.kind == PointerEventKind.up) {
+                                    root.chart-right-clicked(self.mouse-x, self.mouse-y);
+                                }
+                            }
+                            scroll-event(event) => {
+                                if (event.delta-y > 0px) { root.chart-scroll-up(); }
+                                else if (event.delta-y < 0px) { root.chart-scroll-down(); }
+                                return EventResult.accept;
+                            }
+                        }
+                        if (root.context-menu-visible): Rectangle {
+                            x: 0px; y: 0px;
+                            width: parent.width; height: parent.height;
+                            background: #00000000;
+                            TouchArea { clicked => { root.close-context-menu-requested(); } }
+                            Rectangle {
+                                width: 200px;
+                                height: 120px;
+                                x: Math.max(6px, Math.min(root.context-menu-x, parent.width - self.width - 6px));
+                                y: Math.max(6px, Math.min(root.context-menu-y, parent.height - self.height - 6px));
+                                border-radius: 6px;
+                                border-width: 1px;
+                                border-color: #3b4b66;
+                                background: #1e293b;
+                                VerticalBox {
+                                    padding: 6px;
+                                    spacing: 4px;
+                                    Text {
+                                        text: root.context-menu-title;
+                                        color: #cbd5e1;
+                                        wrap: word-wrap;
+                                        font-size: 11px;
+                                    }
+                                    VerticalBox {
+                                        spacing: 2px;
+                                        Button {
+                                            text: root.tr-open;
+                                            width: 100%;
+                                            clicked => { root.open-item-requested(false); }
+                                        }
+                                        Button {
+                                            text: root.tr-open-parent;
+                                            width: 100%;
+                                            clicked => { root.open-item-requested(true); }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    ScrollView {
+                        height: 50px;
+                        HorizontalBox {
+                            spacing: 4px;
+                            LegendBadge { label: "Audio"; swatch-color: root.audio-color; }
+                            LegendBadge { label: "Video"; swatch-color: root.video-color; }
+                            LegendBadge { label: "Image"; swatch-color: root.image-color; }
+                            LegendBadge { label: "Archive"; swatch-color: root.archive-color; }
+                            LegendBadge { label: "Document"; swatch-color: root.document-color; }
+                            LegendBadge { label: "Code"; swatch-color: root.code-color; }
+                            LegendBadge { label: "Disk Image"; swatch-color: root.disk-image-color; }
+                            LegendBadge { label: "Binary"; swatch-color: root.binary-color; }
+                            LegendBadge { label: "Other"; swatch-color: root.other-color; }
+                        }
+                    }
+                    HorizontalBox {
+                        spacing: 4px;
+                        vertical-stretch: 0;
+                        Text {
+                            text: root.tr-top-files;
+                            color: white;
+                            font-size: 13px;
+                            font-weight: 600;
+                            vertical-alignment: center;
+                        }
+                        Rectangle { horizontal-stretch: 1; }
+                        Button {
+                            text: root.top-entries-visible ? root.tr-hide : root.tr-show;
+                            clicked => { root.top-entries-visible = !root.top-entries-visible; }
+                        }
+                    }
+                    if (root.top-entries-visible): Rectangle {
+                        height: 160px;
+                        border-radius: 8px;
+                        background: #111722;
+                        border-width: 1px;
+                        border-color: #243042;
+                        if (root.top-entries.length > 0): ListView {
+                            for entry in root.top-entries: Rectangle {
+                                height: 42px;
+                                background: #141b27;
+                                clip: true;
+                                Rectangle {
+                                    y: 3px;
+                                    x: 8px;
+                                    height: 18px;
+                                    width: parent.width - 16px;
+                                    HorizontalLayout {
+                                        spacing: 4px;
+                                        Text {
+                                            text: entry.name;
+                                            color: #f8fafc;
+                                            font-weight: 600;
+                                            overflow: elide;
+                                            wrap: no-wrap;
+                                            vertical-alignment: center;
+                                            horizontal-stretch: 1;
+                                            font-size: 12px;
+                                        }
+                                        Text {
+                                            text: entry.meta;
+                                            color: #7dd3fc;
+                                            overflow: elide;
+                                            wrap: no-wrap;
+                                            vertical-alignment: center;
+                                            horizontal-stretch: 0;
+                                            font-size: 11px;
+                                        }
+                                        Text {
+                                            text: entry.size_label;
+                                            color: #86efac;
+                                            font-weight: 600;
+                                            overflow: elide;
+                                            wrap: no-wrap;
+                                            vertical-alignment: center;
+                                            horizontal-stretch: 0;
+                                            font-size: 12px;
+                                        }
+                                    }
+                                }
+                                Text {
+                                    y: 23px;
+                                    x: 8px;
+                                    width: parent.width - 16px;
+                                    height: 17px;
+                                    text: entry.path;
+                                    color: #94a3b8;
+                                    overflow: elide;
+                                    wrap: no-wrap;
+                                    vertical-alignment: center;
+                                    font-size: 11px;
+                                }
+                            }
+                        }
+                        if (root.top-entries.length == 0): Text {
+                            text: root.tr-after-scan;
+                            color: #8fa3bf;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                            font-size: 12px;
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

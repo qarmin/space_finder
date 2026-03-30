@@ -1,0 +1,46 @@
+status-default-path = Domyślna ścieżka: { $path }. Kliknij Start by zacząć.
+status-add-paths = Dodaj jeden lub kilka folderów, plików albo ręcznie wpisz ścieżki do skanowania.
+summary-no-results = Brak wyników skanowania
+hover-hint = Najedź kursorem na wykres, aby zobaczyć szczegóły
+status-paths-selected = Wybrano { $count } ścieżek do skanowania.
+status-paths-manual = Lista ścieżek zawiera teraz { $count } ścieżek.
+status-paths-empty = Lista ścieżek jest pusta.
+status-paths-remaining = Pozostało { $count } ścieżek do skanowania.
+status-paths-cleared = Wyczyszczono listę ścieżek.
+status-add-one-path = Najpierw dodaj co najmniej jedną ścieżkę.
+status-scanning = Przeskanowano { $count } plików
+status-scanning-progress = Skanowanie w toku
+status-scan-done = Skanowanie ukończone. Przeskanowano { $count } plików.
+status-scan-canceled = Skanowanie przerwane. Przeskanowano { $count } plików.
+status-view = Widok: { $path }
+status-view-root = Widok: (root)
+status-opening = Otwieram element: { $path }
+status-opening-parent = Otwieram rodzica: { $path }
+status-open-failed = Nie udało się otworzyć: { $error }
+summary-total = Łącznie: { $size } | plików: { $files } | folderów: { $folders } | ostrzeżeń: { $warnings } | wpisów: { $entries }
+summary-total-partial = Łącznie: { $size } | plików: { $files } | folderów: { $folders } | ostrzeżeń: { $warnings } | wpisów: { $entries } | wynik częściowy
+
+ui-sources = Źródła skanowania
+ui-hide = Ukryj ▲
+ui-show = Pokaż ▼
+ui-add-folders = 📁 Foldery
+ui-add-files = 📄 Pliki
+ui-paste-paths = Wklej ścieżki:
+ui-add = Dodaj
+ui-clear = Wyczyść
+ui-selected = Wybrane
+ui-empty = (pusta)
+ui-start = Start
+ui-stop = Przerwij
+ui-visualization = Wizualizacja
+ui-treemap-desc = Prostokąty: większy = więcej miejsca
+ui-top-files = Top pliki
+ui-after-scan = Po skanowaniu
+ui-open = Otwórz
+ui-open-parent = Rodzic
+ui-scanning = Skanowanie...
+ui-color-legend = Legenda kolorów poniżej
+ui-mode-scanning = Skanowanie
+ui-mode-results = Wyniki gotowe
+ui-mode-waiting = Gotowy
+
