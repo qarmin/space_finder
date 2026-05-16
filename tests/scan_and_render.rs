@@ -75,7 +75,7 @@ fn top_entries_returns_files_only() {
     let top = tree.top_entries(8);
 
     assert_eq!(top.len(), 2);
-    assert!(top.iter().all(|entry| entry.kind == "Plik"));
+    assert!(top.iter().all(|entry| entry.kind == "File"));
 }
 
 #[test]

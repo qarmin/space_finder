@@ -1,29 +1,138 @@
 import {
-    Button,
     HorizontalBox,
     ListView,
     ScrollView,
     TextEdit,
     VerticalBox,
 } from "std-widgets.slint";
+
+// ── Enums ──────────────────────────────────────────────────────────────────
+
+export enum Category {
+    folder, audio, video, image, archive, document, code, disk-image, binary, other
+}
+
+export enum OpenTarget { item, parent }
+
+export enum ScrollDirection { up, down }
+
+// ── Color palette ──────────────────────────────────────────────────────────
+
+export global ColorPalette {
+    in-out property <bool> dark-theme: true;
+
+    // Backgrounds
+    out property <color> bg-window:    dark-theme ? #121722 : #f1f5f9;
+    out property <color> bg-panel:     dark-theme ? #171d28 : #ffffff;
+    out property <color> bg-surface:   dark-theme ? #111722 : #f8fafc;
+    out property <color> bg-input:     dark-theme ? #0d1117 : #f0f4f8;
+    out property <color> bg-list-even: dark-theme ? #18202d : #f8fafc;
+    out property <color> bg-list-odd:  dark-theme ? #141b27 : #f1f5f9;
+    out property <color> bg-context:   dark-theme ? #1e293b : #ffffff;
+    out property <color> bg-badge:     dark-theme ? #202938 : #e2e8f0;
+    out property <color> bg-badge-off: dark-theme ? #14181f : #f1f5f9;
+    out property <color> bg-kind:      dark-theme ? #243247 : #dbeafe;
+    out property <color> bg-chart:     dark-theme ? #0e1219 : #f8fafc;
+
+    // Borders
+    out property <color> border-panel:     dark-theme ? #293246 : #e2e8f0;
+    out property <color> border-card:      dark-theme ? #243042 : #e2e8f0;
+    out property <color> border-input:     dark-theme ? #1f2937 : #e2e8f0;
+    out property <color> border-badge:     dark-theme ? #2d3a4f : #cbd5e1;
+    out property <color> border-badge-off: dark-theme ? #1f2832 : #e2e8f0;
+    out property <color> border-context:   dark-theme ? #3b4b66 : #94a3b8;
+
+    // Text
+    out property <color> text-primary:    dark-theme ? #ffffff  : #0f172a;
+    out property <color> text-secondary:  dark-theme ? #c7d2e1  : #334155;
+    out property <color> text-summary:    dark-theme ? #eff6ff  : #1e293b;
+    out property <color> text-muted:      dark-theme ? #8fa3bf  : #64748b;
+    out property <color> text-desc:       dark-theme ? #d5dde8  : #475569;
+    out property <color> text-badge:      dark-theme ? #dce7f5  : #334155;
+    out property <color> text-kind:       dark-theme ? #dbeafe  : #1d4ed8;
+    out property <color> text-hover-name: dark-theme ? #f8fafc  : #0f172a;
+    out property <color> text-hover-meta: dark-theme ? #cbd5e1  : #475569;
+    out property <color> text-accent:     dark-theme ? #7dd3fc  : #0369a1;
+    out property <color> text-path:       dark-theme ? #94a3b8  : #64748b;
+    out property <color> text-treemap:    dark-theme ? #c8d2df  : #64748b;
+    out property <color> text-context:    dark-theme ? #cbd5e1  : #475569;
+
+    // State colors
+    out property <color> success: dark-theme ? #86efac : #16a34a;
+    out property <color> warning: dark-theme ? #fcd34d : #d97706;
+}
+
+// ── Translations global ────────────────────────────────────────────────────
+
+export global Translations {
+    in-out property <string> sources: "Scan Sources";
+    in-out property <string> hide: "Hide ▲";
+    in-out property <string> show: "Show ▼";
+    in-out property <string> add-folders: "📁 Folders";
+    in-out property <string> add-files: "📄 Files";
+    in-out property <string> paste-paths: "Paste paths:";
+    in-out property <string> add: "Add";
+    in-out property <string> clear: "Clear";
+    in-out property <string> selected: "Selected";
+    in-out property <string> empty: "(empty)";
+    in-out property <string> start: "Start";
+    in-out property <string> stop: "Stop";
+    in-out property <string> visualization: "Visualization";
+    in-out property <string> treemap-desc: "Rectangles: larger = more space";
+    in-out property <string> top-files: "Top files";
+    in-out property <string> after-scan: "After scan";
+    in-out property <string> open: "Open";
+    in-out property <string> open-parent: "Open parent";
+    in-out property <string> scanning: "Scanning...";
+    in-out property <string> color-legend: "Color legend below";
+    in-out property <string> mode-scanning: "Scanning";
+    in-out property <string> mode-results: "Results ready";
+    in-out property <string> mode-waiting: "Ready";
+    in-out property <string> filter-reset: "Reset";
+    in-out property <string> filter-clear: "Clear all";
+    in-out property <string> filter-empty: "No categories selected";
+    in-out property <string> cat-audio: "Audio";
+    in-out property <string> cat-video: "Video";
+    in-out property <string> cat-image: "Image";
+    in-out property <string> cat-archive: "Archive";
+    in-out property <string> cat-document: "Document";
+    in-out property <string> cat-code: "Code";
+    in-out property <string> cat-disk-image: "Disk Image";
+    in-out property <string> cat-binary: "Binary";
+    in-out property <string> cat-other: "Other";
+}
+
+// ── Shared data structures ─────────────────────────────────────────────────
+
 export struct ScanPathRow {
     path: string,
     kind_label: string,
 }
+
 export struct TopEntryRow {
     name: string,
     path: string,
     size_label: string,
     meta: string,
 }
+
+// ── Reusable components ────────────────────────────────────────────────────
+
 component LegendBadge inherits Rectangle {
     in property <string> label;
     in property <brush> swatch-color;
-    height: 26px;
+    in property <bool> enabled: true;
+    callback clicked();
+    height: 30px;
     border-radius: 8px;
-    background: #202938;
+    background: root.enabled ? ColorPalette.bg-badge : ColorPalette.bg-badge-off;
     border-width: 1px;
-    border-color: #2d3a4f;
+    border-color: root.enabled ? ColorPalette.border-badge : ColorPalette.border-badge-off;
+    opacity: root.enabled ? 1.0 : 0.42;
+    TouchArea {
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
     HorizontalBox {
         padding-left: 8px;
         padding-right: 8px;
@@ -37,51 +146,122 @@ component LegendBadge inherits Rectangle {
         }
         Text {
             text: root.label;
-            color: #dce7f5;
+            color: ColorPalette.text-badge;
             vertical-alignment: center;
             font-size: 12px;
         }
     }
 }
+
+// ── Custom button ──────────────────────────────────────────────────────────
+
+component AppButton inherits Rectangle {
+    in property <string> label;
+    in property <bool> enabled: true;
+    callback clicked();
+
+    height: 30px;
+    min-width: 50px;
+    border-radius: 6px;
+    background: root.enabled
+        ? (ta.has-hover ? ColorPalette.bg-kind : ColorPalette.bg-badge)
+        : ColorPalette.bg-badge-off;
+    border-width: 1px;
+    border-color: root.enabled ? ColorPalette.border-badge : ColorPalette.border-badge-off;
+
+    ta := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: root.enabled ? pointer : default;
+        clicked => { root.clicked(); }
+    }
+    Text {
+        x: 10px;
+        width: parent.width - 20px;
+        height: parent.height;
+        text: root.label;
+        color: root.enabled ? ColorPalette.text-primary : ColorPalette.text-muted;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        font-size: 13px;
+        overflow: elide;
+        wrap: no-wrap;
+    }
+}
+
+// ── Main window ────────────────────────────────────────────────────────────
+
 export component MainWindow inherits Window {
     title: "Space Finder";
     preferred-width: 1540px;
     preferred-height: 960px;
     min-width: 1180px;
     min-height: 760px;
-    background: #121722;
-    in-out property <[ScanPathRow]> scan-paths: [];
-    in-out property <[TopEntryRow]> top-entries: [];
-    in-out property <image> chart-image;
+    background: ColorPalette.bg-window;
+
+    // Theme state — set from Rust; propagated to ColorPalette on change
+    in property <bool> dark-theme-enabled: true;
+    callback toggle-dark-mode();
+
+    init => {
+        ColorPalette.dark-theme = root.dark-theme-enabled;
+    }
+    changed dark-theme-enabled => {
+        ColorPalette.dark-theme = root.dark-theme-enabled;
+    }
+
+    // Data properties — set from Rust, read-only within Slint
+    in property <[ScanPathRow]> scan-paths: [];
+    in property <[TopEntryRow]> top-entries: [];
+    in property <image> chart-image;
+    in property <string> status-text: "";
+    in property <string> summary-text: "";
+    in property <string> chart-hover-name: "";
+    in property <string> chart-hover-text: "Click an item to see details";
+    in property <string> chart-hover-path: "";
+    in property <bool> scanning: false;
+    in property <bool> has-results: false;
+    in property <bool> context-menu-visible: false;
+    in property <length> context-menu-x: 0px;
+    in property <length> context-menu-y: 0px;
+    in property <string> context-menu-title: "";
+    in property <brush> audio-color: #f0ca57;
+    in property <brush> video-color: #e45758;
+    in property <brush> image-color: #ae6ef7;
+    in property <brush> archive-color: #e0974e;
+    in property <brush> document-color: #54a0ff;
+    in property <brush> code-color: #48c9b0;
+    in property <brush> disk-image-color: #4cc9f0;
+    in property <brush> binary-color: #787eff;
+    in property <brush> folder-color: #697387;
+    in property <brush> other-color: #8d99ae;
+    in property <bool> cat-folder-enabled: true;
+    in property <bool> cat-audio-enabled: true;
+    in property <bool> cat-video-enabled: true;
+    in property <bool> cat-image-enabled: true;
+    in property <bool> cat-archive-enabled: true;
+    in property <bool> cat-document-enabled: true;
+    in property <bool> cat-code-enabled: true;
+    in property <bool> cat-disk-image-enabled: true;
+    in property <bool> cat-binary-enabled: true;
+    in property <bool> cat-other-enabled: true;
+    in property <string> filter-summary: "";
+    in property <bool> filter-active: false;
+
+    // Properties written by Slint itself
     in-out property <string> manual-paths;
-    in-out property <string> status-text: "";
-    in-out property <string> summary-text: "";
-    in-out property <string> chart-hover-text: "Najedz kursorem na wykres, aby zobaczyc szczegoly";
-    in-out property <string> chart-hover-path: "";
-    in-out property <bool> scanning: false;
-    in-out property <bool> has-results: false;
-    in-out property <bool> context-menu-visible: false;
-    in-out property <length> context-menu-x: 0px;
-    in-out property <length> context-menu-y: 0px;
-    in-out property <string> context-menu-title: "";
     in-out property <bool> top-entries-visible: false;
-    in-out property <bool> sources-visible: false;
-    callback toggle-sources-requested();
-    in-out property <brush> audio-color: #f0ca57;
-    in-out property <brush> video-color: #e45758;
-    in-out property <brush> image-color: #ae6ef7;
-    in-out property <brush> archive-color: #e0974e;
-    in-out property <brush> document-color: #54a0ff;
-    in-out property <brush> code-color: #48c9b0;
-    in-out property <brush> disk-image-color: #4cc9f0;
-    in-out property <brush> binary-color: #787eff;
-    in-out property <brush> folder-color: #697387;
-    in-out property <brush> other-color: #8d99ae;
+
+    // Callbacks
+    callback toggle-category(Category);
+    callback filter-reset();
+    callback filter-clear();
     callback add-folders-requested();
     callback add-files-requested();
     callback apply-manual-paths(string);
     callback remove-path-requested(int);
     callback clear-paths-requested();
+    callback path-double-clicked(int);
+    callback path-right-clicked(int);
     callback start-scan-requested();
     callback stop-scan-requested();
     callback chart-hovered(length, length);
@@ -89,174 +269,172 @@ export component MainWindow inherits Window {
     callback chart-right-clicked(length, length);
     callback chart-double-clicked(length, length);
     callback chart-area-resized(length, length);
-    callback open-item-requested(bool);
+    callback open-item-requested(OpenTarget);
     callback close-context-menu-requested();
-    callback chart-scroll-up();
-    callback chart-scroll-down();
-
-    // Translation properties — set from Rust via set_ui_translations()
-    in-out property <string> tr-sources: "Scan Sources";
-    in-out property <string> tr-hide: "Hide ▲";
-    in-out property <string> tr-show: "Show ▼";
-    in-out property <string> tr-add-folders: "📁 Folders";
-    in-out property <string> tr-add-files: "📄 Files";
-    in-out property <string> tr-paste-paths: "Paste paths:";
-    in-out property <string> tr-add: "Add";
-    in-out property <string> tr-clear: "Clear";
-    in-out property <string> tr-selected: "Selected";
-    in-out property <string> tr-empty: "(empty)";
-    in-out property <string> tr-start: "Start";
-    in-out property <string> tr-stop: "Stop";
-    in-out property <string> tr-visualization: "Visualization";
-    in-out property <string> tr-treemap-desc: "Rectangles: larger = more space";
-    in-out property <string> tr-top-files: "Top files";
-    in-out property <string> tr-after-scan: "After scan";
-    in-out property <string> tr-open: "Open";
-    in-out property <string> tr-open-parent: "Open parent";
-    in-out property <string> tr-scanning: "Scanning...";
-    in-out property <string> tr-color-legend: "Color legend below";
-    in-out property <string> tr-mode-scanning: "Scanning";
-    in-out property <string> tr-mode-results: "Results ready";
-    in-out property <string> tr-mode-waiting: "Ready";
+    callback chart-scrolled(ScrollDirection);
 
     VerticalBox {
         padding: 14px;
         spacing: 12px;
         HorizontalBox {
             spacing: 8px;
+            // ── Left panel ─────────────────────────────────────────────────
             Rectangle {
                 width: 280px;
                 border-radius: 12px;
-                background: #171d28;
+                background: ColorPalette.bg-panel;
                 border-width: 1px;
-                border-color: #293246;
+                border-color: ColorPalette.border-panel;
                 VerticalBox {
                     padding: 10px;
                     spacing: 8px;
-                    Text {
-                        text: "Space Finder";
-                        color: white;
-                        font-size: 18px;
-                        font-weight: 700;
+                    // Title row with theme toggle
+                    HorizontalLayout {
+                        spacing: 6px;
+                        vertical-stretch: 0;
+                        Text {
+                            text: "Space Finder";
+                            color: ColorPalette.text-primary;
+                            font-size: 18px;
+                            font-weight: 700;
+                            vertical-alignment: center;
+                            horizontal-stretch: 1;
+                        }
+                        AppButton {
+                            label: root.dark-theme-enabled ? "☀" : "🌙";
+                            clicked => { root.toggle-dark-mode(); }
+                        }
                     }
+                    // Status / summary box
                     Rectangle {
                         border-radius: 8px;
-                        background: #111722;
+                        background: ColorPalette.bg-surface;
                         border-width: 1px;
-                        border-color: #243042;
+                        border-color: ColorPalette.border-card;
                         VerticalBox {
                             padding: 8px;
                             spacing: 2px;
                             Text {
                                 text: root.status-text;
-                                color: #c7d2e1;
+                                color: ColorPalette.text-secondary;
                                 wrap: word-wrap;
                                 font-size: 13px;
                             }
                             Text {
                                 text: root.summary-text;
-                                color: #eff6ff;
+                                color: ColorPalette.text-summary;
                                 wrap: word-wrap;
                                 font-size: 13px;
                             }
                             Text {
-                                text: root.scanning ? root.tr-mode-scanning : (root.has-results ? root.tr-mode-results : root.tr-mode-waiting);
-                                color: root.scanning ? #fcd34d : #7dd3fc;
+                                text: root.scanning
+                                    ? Translations.mode-scanning
+                                    : (root.has-results ? Translations.mode-results : Translations.mode-waiting);
+                                color: root.scanning ? ColorPalette.warning : ColorPalette.text-accent;
                                 font-size: 12px;
                             }
                         }
                     }
-                    HorizontalBox {
-                        spacing: 6px;
-                        vertical-stretch: 0;
-                        Text {
-                            text: root.tr-sources;
-                            color: white;
-                            font-size: 15px;
-                            font-weight: 600;
-                            vertical-alignment: center;
-                        }
-                        Rectangle { horizontal-stretch: 1; }
-                        Button {
-                            text: root.sources-visible ? root.tr-hide : root.tr-show;
-                            clicked => { root.toggle-sources-requested(); }
-                        }
+                    // Sources heading
+                    Text {
+                        text: Translations.sources;
+                        color: ColorPalette.text-primary;
+                        font-size: 15px;
+                        font-weight: 600;
+                        vertical-alignment: center;
                     }
-                    if (root.sources-visible): Rectangle {
+                    // Path list area
+                    Rectangle {
                         border-radius: 8px;
-                        background: #0d1117;
+                        background: ColorPalette.bg-input;
                         border-width: 1px;
-                        border-color: #1f2937;
+                        border-color: ColorPalette.border-input;
+                        vertical-stretch: 1;
                         VerticalBox {
                             padding: 8px;
                             spacing: 6px;
                             HorizontalBox {
                                 spacing: 4px;
-                                Button {
-                                    text: root.tr-add-folders;
+                                vertical-stretch: 0;
+                                AppButton {
+                                    label: Translations.add-folders;
                                     enabled: !root.scanning;
                                     clicked => { root.add-folders-requested(); }
                                 }
-                                Button {
-                                    text: root.tr-add-files;
+                                AppButton {
+                                    label: Translations.add-files;
                                     enabled: !root.scanning;
                                     clicked => { root.add-files-requested(); }
                                 }
                             }
                             Text {
-                                text: root.tr-paste-paths;
-                                color: #d5dde8;
+                                text: Translations.paste-paths;
+                                color: ColorPalette.text-desc;
                                 font-size: 12px;
+                                vertical-stretch: 0;
                             }
                             TextEdit {
                                 text <=> root.manual-paths;
                                 enabled: !root.scanning;
                                 height: 60px;
+                                vertical-stretch: 0;
                             }
                             HorizontalBox {
                                 spacing: 4px;
-                                Button {
-                                    text: root.tr-add;
+                                vertical-stretch: 0;
+                                AppButton {
+                                    label: Translations.add;
                                     enabled: !root.scanning && root.manual-paths != "";
-                                    clicked => {
-                                        root.apply-manual-paths(root.manual-paths);
-                                    }
+                                    clicked => { root.apply-manual-paths(root.manual-paths); }
                                 }
-                                Button {
-                                    text: root.tr-clear;
+                                AppButton {
+                                    label: Translations.clear;
                                     enabled: !root.scanning && root.scan-paths.length > 0;
                                     clicked => { root.clear-paths-requested(); }
                                 }
                             }
                             Text {
-                                text: root.tr-selected + " (" + root.scan-paths.length + "):";
-                                color: white;
+                                text: Translations.selected + " (" + root.scan-paths.length + "):";
+                                color: ColorPalette.text-primary;
                                 font-size: 12px;
                                 font-weight: 600;
+                                vertical-stretch: 0;
                             }
                             Rectangle {
                                 border-radius: 6px;
-                                background: #111722;
+                                background: ColorPalette.bg-surface;
                                 border-width: 1px;
-                                border-color: #243042;
-                                height: 120px;
+                                border-color: ColorPalette.border-card;
+                                vertical-stretch: 1;
+                                min-height: 120px;
                                 if (root.scan-paths.length > 0): ListView {
                                     for path[idx] in root.scan-paths: Rectangle {
-                                        height: 32px;
-                                        background: Math.mod(idx, 2) == 0 ? #18202d : #141b27;
+                                        height: 46px;
+                                        background: Math.mod(idx, 2) == 0
+                                            ? ColorPalette.bg-list-even
+                                            : ColorPalette.bg-list-odd;
+                                        row-touch := TouchArea {
+                                            mouse-cursor: pointer;
+                                            double-clicked => { root.path-double-clicked(idx); }
+                                            pointer-event(event) => {
+                                                if (event.button == PointerEventButton.right && event.kind == PointerEventKind.up) {
+                                                    root.path-right-clicked(idx);
+                                                }
+                                            }
+                                        }
                                         HorizontalBox {
-                                            padding-left: 6px;
-                                            padding-right: 6px;
+                                            padding-left: 8px;
+                                            padding-right: 8px;
                                             padding-top: 4px;
                                             padding-bottom: 4px;
-                                            spacing: 4px;
+                                            spacing: 6px;
                                             Rectangle {
-                                                width: 36px;
+                                                width: 44px;
                                                 border-radius: 4px;
-                                                background: #243247;
+                                                background: ColorPalette.bg-kind;
                                                 Text {
                                                     text: path.kind_label;
-                                                    color: #dbeafe;
+                                                    color: ColorPalette.text-kind;
                                                     horizontal-alignment: center;
                                                     vertical-alignment: center;
                                                     font-size: 11px;
@@ -264,15 +442,15 @@ export component MainWindow inherits Window {
                                             }
                                             Text {
                                                 text: path.path;
-                                                color: white;
+                                                color: ColorPalette.text-primary;
                                                 vertical-alignment: center;
                                                 wrap: no-wrap;
                                                 overflow: elide;
                                                 horizontal-stretch: 1;
-                                                font-size: 12px;
+                                                font-size: 13px;
                                             }
-                                            Button {
-                                                text: "✕";
+                                            AppButton {
+                                                label: "✕";
                                                 enabled: !root.scanning;
                                                 clicked => { root.remove-path-requested(idx); }
                                             }
@@ -280,8 +458,8 @@ export component MainWindow inherits Window {
                                     }
                                 }
                                 if (root.scan-paths.length == 0): Text {
-                                    text: root.tr-empty;
-                                    color: #8fa3bf;
+                                    text: Translations.empty;
+                                    color: ColorPalette.text-muted;
                                     horizontal-alignment: center;
                                     vertical-alignment: center;
                                     font-size: 12px;
@@ -289,12 +467,11 @@ export component MainWindow inherits Window {
                             }
                         }
                     }
-                    Rectangle { vertical-stretch: 1; }
                     HorizontalBox {
                         spacing: 4px;
                         vertical-stretch: 0;
-                        Button {
-                            text: root.scanning ? root.tr-stop : root.tr-start;
+                        AppButton {
+                            label: root.scanning ? Translations.stop : Translations.start;
                             enabled: root.scanning || root.scan-paths.length > 0;
                             clicked => {
                                 if (root.scanning) {
@@ -307,65 +484,62 @@ export component MainWindow inherits Window {
                     }
                 }
             }
+            // ── Right panel (chart + controls) ─────────────────────────────
             Rectangle {
                 border-radius: 12px;
-                background: #171d28;
+                background: ColorPalette.bg-panel;
                 border-width: 1px;
-                border-color: #293246;
+                border-color: ColorPalette.border-panel;
                 horizontal-stretch: 1;
                 VerticalBox {
                     padding: 10px;
                     spacing: 6px;
-                    HorizontalBox {
-                        spacing: 6px;
-                        Text {
-                            text: root.tr-visualization;
-                            color: white;
-                            font-size: 16px;
-                            font-weight: 650;
-                        }
-                        Rectangle { }
+                    Text {
+                        text: Translations.visualization;
+                        color: ColorPalette.text-primary;
+                        font-size: 16px;
+                        font-weight: 650;
+                        vertical-stretch: 0;
                     }
                     Text {
-                        text: root.tr-treemap-desc;
-                        color: #c8d2df;
-                        wrap: word-wrap;
+                        text: Translations.treemap-desc;
+                        color: ColorPalette.text-treemap;
+                        wrap: no-wrap;
+                        overflow: elide;
                         font-size: 12px;
-                    }
-                    Rectangle {
-                        height: 44px;
                         vertical-stretch: 0;
-                        clip: true;
-                        Rectangle {
-                            y: 2px;
-                            height: 22px;
-                            width: parent.width;
+                    }
+                    // Hover info box
+                    Rectangle {
+                        border-radius: 8px;
+                        background: ColorPalette.bg-surface;
+                        border-width: 1px;
+                        border-color: ColorPalette.border-card;
+                        vertical-stretch: 0;
+                        VerticalLayout {
+                            padding: 8px;
+                            spacing: 4px;
                             Text {
-                                y: 2px;
-                                height: 22px;
-                                width: parent.width;
-                                text: root.chart-hover-text;
-                                color: #f9fafb;
+                                text: root.chart-hover-name == "" ? root.chart-hover-text : root.chart-hover-name;
+                                color: ColorPalette.text-hover-name;
+                                font-size: 16px;
+                                font-weight: 700;
                                 overflow: elide;
                                 wrap: no-wrap;
-                                vertical-alignment: center;
-                                font-size: 13px;
                             }
-                        }
-                        Rectangle {
-                            y: 25px;
-                            height: 18px;
-                            width: parent.width;
                             Text {
-                                y: 25px;
-                                height: 18px;
-                                width: parent.width;
-                                text: root.chart-hover-path;
-                                color: #7dd3fc;
+                                text: root.chart-hover-name == "" ? "" : root.chart-hover-text;
+                                color: ColorPalette.text-hover-meta;
+                                font-size: 13px;
                                 overflow: elide;
                                 wrap: no-wrap;
-                                vertical-alignment: center;
+                            }
+                            Text {
+                                text: root.chart-hover-path;
+                                color: ColorPalette.text-accent;
                                 font-size: 12px;
+                                overflow: elide;
+                                wrap: no-wrap;
                             }
                         }
                     }
@@ -373,9 +547,9 @@ export component MainWindow inherits Window {
                         horizontal-stretch: 1;
                         vertical-stretch: 1;
                         border-radius: 8px;
-                        background: #0f1520;
+                        background: ColorPalette.bg-chart;
                         border-width: 1px;
-                        border-color: #243042;
+                        border-color: ColorPalette.border-card;
                         clip: true;
                         changed width => {
                             root.chart-area-resized(self.width, self.height);
@@ -390,8 +564,8 @@ export component MainWindow inherits Window {
                             image-fit: fill;
                         }
                         if (!root.has-results): Text {
-                            text: root.scanning ? root.tr-scanning : root.tr-color-legend;
-                            color: #8fa3bf;
+                            text: root.scanning ? Translations.scanning : Translations.color-legend;
+                            color: ColorPalette.text-muted;
                             wrap: word-wrap;
                             horizontal-alignment: center;
                             vertical-alignment: center;
@@ -407,8 +581,8 @@ export component MainWindow inherits Window {
                                 }
                             }
                             scroll-event(event) => {
-                                if (event.delta-y > 0px) { root.chart-scroll-up(); }
-                                else if (event.delta-y < 0px) { root.chart-scroll-down(); }
+                                if (event.delta-y > 0px) { root.chart-scrolled(ScrollDirection.up); }
+                                else if (event.delta-y < 0px) { root.chart-scrolled(ScrollDirection.down); }
                                 return EventResult.accept;
                             }
                         }
@@ -424,75 +598,144 @@ export component MainWindow inherits Window {
                                 y: Math.max(6px, Math.min(root.context-menu-y, parent.height - self.height - 6px));
                                 border-radius: 6px;
                                 border-width: 1px;
-                                border-color: #3b4b66;
-                                background: #1e293b;
+                                border-color: ColorPalette.border-context;
+                                background: ColorPalette.bg-context;
                                 VerticalBox {
                                     padding: 6px;
                                     spacing: 4px;
                                     Text {
                                         text: root.context-menu-title;
-                                        color: #cbd5e1;
+                                        color: ColorPalette.text-context;
                                         wrap: word-wrap;
                                         font-size: 11px;
                                     }
                                     VerticalBox {
                                         spacing: 2px;
-                                        Button {
-                                            text: root.tr-open;
-                                            width: 100%;
-                                            clicked => { root.open-item-requested(false); }
+                                        AppButton {
+                                            label: Translations.open;
+                                            horizontal-stretch: 1;
+                                            clicked => { root.open-item-requested(OpenTarget.item); }
                                         }
-                                        Button {
-                                            text: root.tr-open-parent;
-                                            width: 100%;
-                                            clicked => { root.open-item-requested(true); }
+                                        AppButton {
+                                            label: Translations.open-parent;
+                                            horizontal-stretch: 1;
+                                            clicked => { root.open-item-requested(OpenTarget.parent); }
                                         }
                                     }
                                 }
                             }
                         }
                     }
+                    // Category filter legend
                     ScrollView {
-                        height: 50px;
-                        HorizontalBox {
+                        height: 80px;
+                        VerticalLayout {
                             spacing: 4px;
-                            LegendBadge { label: "Audio"; swatch-color: root.audio-color; }
-                            LegendBadge { label: "Video"; swatch-color: root.video-color; }
-                            LegendBadge { label: "Image"; swatch-color: root.image-color; }
-                            LegendBadge { label: "Archive"; swatch-color: root.archive-color; }
-                            LegendBadge { label: "Document"; swatch-color: root.document-color; }
-                            LegendBadge { label: "Code"; swatch-color: root.code-color; }
-                            LegendBadge { label: "Disk Image"; swatch-color: root.disk-image-color; }
-                            LegendBadge { label: "Binary"; swatch-color: root.binary-color; }
-                            LegendBadge { label: "Other"; swatch-color: root.other-color; }
+                            padding-top: 2px;
+                            padding-bottom: 2px;
+                            HorizontalLayout {
+                                spacing: 4px;
+                                LegendBadge {
+                                    label: Translations.cat-audio;
+                                    swatch-color: root.audio-color;
+                                    enabled: root.cat-audio-enabled;
+                                    clicked => { root.toggle-category(Category.audio); }
+                                }
+                                LegendBadge {
+                                    label: Translations.cat-video;
+                                    swatch-color: root.video-color;
+                                    enabled: root.cat-video-enabled;
+                                    clicked => { root.toggle-category(Category.video); }
+                                }
+                                LegendBadge {
+                                    label: Translations.cat-image;
+                                    swatch-color: root.image-color;
+                                    enabled: root.cat-image-enabled;
+                                    clicked => { root.toggle-category(Category.image); }
+                                }
+                                LegendBadge {
+                                    label: Translations.cat-archive;
+                                    swatch-color: root.archive-color;
+                                    enabled: root.cat-archive-enabled;
+                                    clicked => { root.toggle-category(Category.archive); }
+                                }
+                                LegendBadge {
+                                    label: Translations.cat-document;
+                                    swatch-color: root.document-color;
+                                    enabled: root.cat-document-enabled;
+                                    clicked => { root.toggle-category(Category.document); }
+                                }
+                                LegendBadge {
+                                    label: Translations.cat-code;
+                                    swatch-color: root.code-color;
+                                    enabled: root.cat-code-enabled;
+                                    clicked => { root.toggle-category(Category.code); }
+                                }
+                                LegendBadge {
+                                    label: Translations.cat-disk-image;
+                                    swatch-color: root.disk-image-color;
+                                    enabled: root.cat-disk-image-enabled;
+                                    clicked => { root.toggle-category(Category.disk-image); }
+                                }
+                                LegendBadge {
+                                    label: Translations.cat-binary;
+                                    swatch-color: root.binary-color;
+                                    enabled: root.cat-binary-enabled;
+                                    clicked => { root.toggle-category(Category.binary); }
+                                }
+                                LegendBadge {
+                                    label: Translations.cat-other;
+                                    swatch-color: root.other-color;
+                                    enabled: root.cat-other-enabled;
+                                    clicked => { root.toggle-category(Category.other); }
+                                }
+                                Rectangle { horizontal-stretch: 1; }
+                                AppButton {
+                                    label: Translations.filter-reset;
+                                    clicked => { root.filter-reset(); }
+                                }
+                                AppButton {
+                                    label: Translations.filter-clear;
+                                    clicked => { root.filter-clear(); }
+                                }
+                            }
+                            Text {
+                                text: root.filter-summary;
+                                color: root.filter-active ? ColorPalette.success : ColorPalette.text-muted;
+                                font-size: 12px;
+                                vertical-alignment: center;
+                                overflow: elide;
+                                wrap: no-wrap;
+                            }
                         }
                     }
+                    // Top files section
                     HorizontalBox {
                         spacing: 4px;
                         vertical-stretch: 0;
                         Text {
-                            text: root.tr-top-files;
-                            color: white;
+                            text: Translations.top-files;
+                            color: ColorPalette.text-primary;
                             font-size: 13px;
                             font-weight: 600;
                             vertical-alignment: center;
                         }
                         Rectangle { horizontal-stretch: 1; }
-                        Button {
-                            text: root.top-entries-visible ? root.tr-hide : root.tr-show;
+                        AppButton {
+                            label: root.top-entries-visible ? Translations.hide : Translations.show;
                             clicked => { root.top-entries-visible = !root.top-entries-visible; }
                         }
                     }
                     if (root.top-entries-visible): Rectangle {
                         height: 160px;
                         border-radius: 8px;
-                        background: #111722;
+                        background: ColorPalette.bg-surface;
                         border-width: 1px;
-                        border-color: #243042;
+                        border-color: ColorPalette.border-card;
                         if (root.top-entries.length > 0): ListView {
                             for entry in root.top-entries: Rectangle {
                                 height: 42px;
-                                background: #141b27;
+                                background: ColorPalette.bg-list-odd;
                                 clip: true;
                                 Rectangle {
                                     y: 3px;
@@ -503,7 +746,7 @@ export component MainWindow inherits Window {
                                         spacing: 4px;
                                         Text {
                                             text: entry.name;
-                                            color: #f8fafc;
+                                            color: ColorPalette.text-hover-name;
                                             font-weight: 600;
                                             overflow: elide;
                                             wrap: no-wrap;
@@ -513,7 +756,7 @@ export component MainWindow inherits Window {
                                         }
                                         Text {
                                             text: entry.meta;
-                                            color: #7dd3fc;
+                                            color: ColorPalette.text-accent;
                                             overflow: elide;
                                             wrap: no-wrap;
                                             vertical-alignment: center;
@@ -522,7 +765,7 @@ export component MainWindow inherits Window {
                                         }
                                         Text {
                                             text: entry.size_label;
-                                            color: #86efac;
+                                            color: ColorPalette.success;
                                             font-weight: 600;
                                             overflow: elide;
                                             wrap: no-wrap;
@@ -538,7 +781,7 @@ export component MainWindow inherits Window {
                                     width: parent.width - 16px;
                                     height: 17px;
                                     text: entry.path;
-                                    color: #94a3b8;
+                                    color: ColorPalette.text-path;
                                     overflow: elide;
                                     wrap: no-wrap;
                                     vertical-alignment: center;
@@ -547,8 +790,8 @@ export component MainWindow inherits Window {
                             }
                         }
                         if (root.top-entries.length == 0): Text {
-                            text: root.tr-after-scan;
-                            color: #8fa3bf;
+                            text: Translations.after-scan;
+                            color: ColorPalette.text-muted;
                             horizontal-alignment: center;
                             vertical-alignment: center;
                             font-size: 12px;

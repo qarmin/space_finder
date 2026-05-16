@@ -48,16 +48,16 @@ impl FileCategory {
     }
     pub fn label(self) -> &'static str {
         match self {
-            Self::Folder => "Foldery",
-            Self::Audio => "Muzyka",
-            Self::Video => "Filmy",
-            Self::Image => "Obrazy",
-            Self::Archive => "Archiwa",
-            Self::Document => "Dokumenty",
-            Self::Code => "Kod",
-            Self::DiskImage => "Obrazy dysków",
-            Self::Binary => "Binaria",
-            Self::Other => "Inne",
+            Self::Folder => "Folders",
+            Self::Audio => "Audio",
+            Self::Video => "Video",
+            Self::Image => "Image",
+            Self::Archive => "Archive",
+            Self::Document => "Document",
+            Self::Code => "Code",
+            Self::DiskImage => "Disk Image",
+            Self::Binary => "Binary",
+            Self::Other => "Other",
         }
     }
     pub fn color(self) -> [u8; 4] {
@@ -308,11 +308,11 @@ impl ScanTree {
         }
         self.roots
             .sort_unstable_by(|left, right| right.size.cmp(&left.size).then_with(|| left.path.cmp(&right.path)));
-        self.top_entries_cache = compute_top_entries(&self.roots, TOP_ENTRIES_CACHE_LIMIT);
+        self.top_entries_cache = compute_top_entries(&self.roots, TOP_ENTRIES_CACHE_LIMIT, &[true; CATEGORY_COUNT]);
     }
     pub fn virtual_root(&self) -> EntryNode {
         let mut root = EntryNode {
-            name: "Wszystkie ścieżki".into(),
+            name: "All paths".into(),
             path: PathBuf::from("/"),
             path_str: "/".to_string(),
             size: self.total_size,
@@ -333,7 +333,16 @@ impl ScanTree {
         if limit <= self.top_entries_cache.len() {
             return self.top_entries_cache[..limit].to_vec();
         }
-        compute_top_entries(&self.roots, limit)
+        compute_top_entries(&self.roots, limit, &[true; CATEGORY_COUNT])
+    }
+    pub fn top_entries_filtered(&self, limit: usize, mask: &[bool; CATEGORY_COUNT]) -> Vec<TopEntry> {
+        if limit == 0 {
+            return Vec::new();
+        }
+        if mask.iter().all(|enabled| *enabled) {
+            return self.top_entries(limit);
+        }
+        compute_top_entries(&self.roots, limit, mask)
     }
 }
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -378,20 +387,20 @@ impl Ord for WorstFirst<'_> {
     }
 }
 
-fn compute_top_entries(roots: &[EntryNode], limit: usize) -> Vec<TopEntry> {
+fn compute_top_entries(roots: &[EntryNode], limit: usize, mask: &[bool; CATEGORY_COUNT]) -> Vec<TopEntry> {
     if limit == 0 {
         return Vec::new();
     }
     let mut heap = BinaryHeap::with_capacity(limit);
     for root in roots {
-        collect_top_files(root, limit, &mut heap);
+        collect_top_files(root, limit, mask, &mut heap);
     }
     let mut ranked = heap
         .into_iter()
         .map(|entry| TopEntry {
             path: entry.0.path.to_string_lossy().to_string(),
             size: entry.0.size,
-            kind: "Plik".to_string(),
+            kind: "File".to_string(),
             category: entry.0.category,
         })
         .collect::<Vec<_>>();
@@ -399,8 +408,13 @@ fn compute_top_entries(roots: &[EntryNode], limit: usize) -> Vec<TopEntry> {
     ranked
 }
 
-fn collect_top_files<'a>(node: &'a EntryNode, limit: usize, heap: &mut BinaryHeap<WorstFirst<'a>>) {
-    if matches!(node.kind, NodeKind::File) && node.size > 0 {
+fn collect_top_files<'a>(
+    node: &'a EntryNode,
+    limit: usize,
+    mask: &[bool; CATEGORY_COUNT],
+    heap: &mut BinaryHeap<WorstFirst<'a>>,
+) {
+    if matches!(node.kind, NodeKind::File) && node.size > 0 && mask[node.category.index()] {
         let candidate = TopFileRef {
             path: &node.path,
             size: node.size,
@@ -416,15 +430,15 @@ fn collect_top_files<'a>(node: &'a EntryNode, limit: usize, heap: &mut BinaryHea
         }
     }
     for child in &node.children {
-        collect_top_files(child, limit, heap);
+        collect_top_files(child, limit, mask, heap);
     }
 }
 pub fn kind_label(kind: &NodeKind) -> &'static str {
     match kind {
-        NodeKind::File => "Plik",
+        NodeKind::File => "File",
         NodeKind::Directory => "Folder",
         NodeKind::Symlink => "Symlink",
-        NodeKind::Inaccessible => "Brak dostępu",
+        NodeKind::Inaccessible => "No access",
     }
 }
 pub fn display_name(path: &Path) -> String {
@@ -447,6 +461,33 @@ pub fn format_bytes(bytes: u64) -> String {
     }
     format!("{value:.2} {}", UNITS[unit_idx])
 }
+/// Walk the tree summing file sizes/counts whose category index is enabled in `mask`.
+pub fn filter_stats(tree: &ScanTree, mask: &[bool; CATEGORY_COUNT]) -> (u64, u64) {
+    let mut size = 0_u64;
+    let mut count = 0_u64;
+    for root in &tree.roots {
+        walk_filter_stats(root, mask, &mut size, &mut count);
+    }
+    (size, count)
+}
+
+fn walk_filter_stats(node: &EntryNode, mask: &[bool; CATEGORY_COUNT], size: &mut u64, count: &mut u64) {
+    match node.kind {
+        NodeKind::File => {
+            if mask[node.category.index()] {
+                *size = size.saturating_add(node.size);
+                *count = count.saturating_add(1);
+            }
+        }
+        NodeKind::Directory => {
+            for child in &node.children {
+                walk_filter_stats(child, mask, size, count);
+            }
+        }
+        NodeKind::Symlink | NodeKind::Inaccessible => {}
+    }
+}
+
 pub fn merge_paths(existing: &mut Vec<PathBuf>, new_paths: impl IntoIterator<Item = PathBuf>) {
     for path in new_paths {
         if !existing.iter().any(|item| item == &path) {
@@ -459,8 +500,8 @@ pub fn detect_path_kind(path: &Path) -> &'static str {
     if path.is_dir() {
         "Folder"
     } else if path.is_file() {
-        "Plik"
+        "File"
     } else {
-        "Ścieżka"
+        "Path"
     }
 }

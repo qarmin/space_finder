@@ -10,27 +10,20 @@ Scan any folder (or multiple paths), see which files and directories consume the
 - **Treemap** – proportional rectangles; larger rect = more disk space used
 - **Folder composition** – directory blocks show an internal colour gradient (left → right) representing the file-type breakdown, with diagonal hatching so they are visually distinct from files
 - **Interactive zoom** – scroll wheel zooms into / out of any selected path
-- **Right-click context menu** – open item or its parent in the system file manager
+- **Click to inspect** – left-click a block to see its name, path and size
+- **Category filter** – toggle file categories (audio, video, images, archives, documents, code, …) on the chart
+- **Right-click context menu** – open the item or its parent in the system file manager
 - **Top-files list** – quick list of the 32 largest files found
-- **Multilingual** – automatically uses the OS locale; English and Polish translations included
-
-## Supported platforms
-
-| Platform               | Tested |
-|------------------------|--------|
-| Linux (x86-64)         | ✅      |
-| Windows (x86-64)       | ✅      |
-| macOS (arm64 / x86-64) | ✅      |
+- **Dark mode** – togglable light / dark theme, persisted between runs
+- **Persisted sources** – the last scanned path list is restored on startup
 
 ## Download
 
-Pre-built binaries are attached to every CI run as **GitHub Actions artifacts** (see the *Actions* tab).
+Pre-built binaries are available on the [releases page](https://github.com/qarmin/space_finder/releases).
 
-## Building from source
+Alternatively, build from source (requires the Rust stable toolchain):
 
 ```bash
-# Prerequisites: Rust stable toolchain
-
 cargo build --release
 # binary: target/release/space_finder
 ```
@@ -41,15 +34,6 @@ cargo build --release
 2. Click **Start** – the chart renders automatically when the scan finishes.
 3. **Left-click** a block to select it; **scroll up** to zoom in toward the selection, **scroll down** to zoom out.
 4. **Right-click** to open the item or its parent folder in the file manager.
-
-## Translations
-
-Translation files live in `i18n/<lang>/space_finder.ftl` (Mozilla Fluent format).
-The app picks the OS locale automatically; English is the fallback.
-
-To add a new language:
-1. Create `i18n/<lang-code>/space_finder.ftl`
-2. Copy `i18n/en/space_finder.ftl` and translate the values.
 
 ## License
 

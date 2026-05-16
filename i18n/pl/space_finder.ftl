@@ -1,7 +1,7 @@
 status-default-path = Domyślna ścieżka: { $path }. Kliknij Start by zacząć.
 status-add-paths = Dodaj jeden lub kilka folderów, plików albo ręcznie wpisz ścieżki do skanowania.
 summary-no-results = Brak wyników skanowania
-hover-hint = Najedź kursorem na wykres, aby zobaczyć szczegóły
+hover-hint = Kliknij element, aby zobaczyć szczegóły
 status-paths-selected = Wybrano { $count } ścieżek do skanowania.
 status-paths-manual = Lista ścieżek zawiera teraz { $count } ścieżek.
 status-paths-empty = Lista ścieżek jest pusta.
@@ -43,4 +43,19 @@ ui-color-legend = Legenda kolorów poniżej
 ui-mode-scanning = Skanowanie
 ui-mode-results = Wyniki gotowe
 ui-mode-waiting = Gotowy
+ui-filter-reset = Reset
+ui-filter-clear = Wyczyść wszystko
+ui-filter-empty = Nie wybrano żadnej kategorii
+ui-filter-summary = Filtr: { $size } · { $count } plików
+ui-filter-total = Łącznie: { $size } · { $count } plików
+
+cat-audio = Audio
+cat-video = Wideo
+cat-image = Obraz
+cat-archive = Archiwum
+cat-document = Dokument
+cat-code = Kod
+cat-disk-image = Obraz dysku
+cat-binary = Plik binarny
+cat-other = Inne
 

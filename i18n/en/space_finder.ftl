@@ -1,7 +1,7 @@
 status-default-path = Default path: { $path }. Click Start to begin.
 status-add-paths = Add one or more folders, files or enter paths manually to scan.
 summary-no-results = No scan results
-hover-hint = Hover over the chart to see details
+hover-hint = Click an item to see details
 status-paths-selected = Selected { $count } paths to scan.
 status-paths-manual = Path list now contains { $count } paths.
 status-paths-empty = Path list is empty.
@@ -43,4 +43,19 @@ ui-color-legend = Color legend below
 ui-mode-scanning = Scanning
 ui-mode-results = Results ready
 ui-mode-waiting = Ready
+ui-filter-reset = Reset
+ui-filter-clear = Clear all
+ui-filter-empty = No categories selected
+ui-filter-summary = Filter: { $size } · { $count } files
+ui-filter-total = Total: { $size } · { $count } files
+
+cat-audio = Audio
+cat-video = Video
+cat-image = Image
+cat-archive = Archive
+cat-document = Document
+cat-code = Code
+cat-disk-image = Disk Image
+cat-binary = Binary
+cat-other = Other
 

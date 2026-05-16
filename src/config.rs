@@ -2,9 +2,24 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Default)]
+#[derive(Serialize, Deserialize)]
 pub struct AppConfig {
     pub last_paths: Vec<PathBuf>,
+    #[serde(default = "default_dark_mode")]
+    pub dark_mode: bool,
+}
+
+fn default_dark_mode() -> bool {
+    true
+}
+
+impl Default for AppConfig {
+    fn default() -> Self {
+        Self {
+            last_paths: Vec::new(),
+            dark_mode: true,
+        }
+    }
 }
 
 impl AppConfig {

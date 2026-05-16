@@ -12,13 +12,19 @@ use rfd::FileDialog;
 use slint::{Brush, ComponentHandle, ModelRc, SharedString, VecModel};
 
 use crate::{
-    MainWindow, ScanPathRow, TopEntryRow,
+    Category, MainWindow, OpenTarget, ScanPathRow, ScrollDirection, TopEntryRow, Translations,
     config::AppConfig,
     localizer::setup_language,
-    model::{FileCategory, ScanTree, TopEntry, detect_path_kind, format_bytes, merge_paths},
-    render::{DEFAULT_RENDER_HEIGHT, DEFAULT_RENDER_WIDTH, HitMap, empty_chart, render_chart_with_hits},
+    model::{
+        CATEGORY_COUNT, FileCategory, ScanTree, TopEntry, detect_path_kind, filter_stats, format_bytes, merge_paths,
+    },
+    render::{
+        ALL_CATEGORIES_ENABLED, CategoryMask, DEFAULT_RENDER_HEIGHT, DEFAULT_RENDER_WIDTH, HitMap, empty_chart,
+        mask_all_enabled, mask_none_enabled, render_chart_with_hits,
+    },
     scan, t,
 };
+
 #[derive(Clone)]
 struct ChartUiState {
     tree: Option<Arc<ScanTree>>,
@@ -29,7 +35,10 @@ struct ChartUiState {
     selected_path: Option<String>,
     context_path: Option<String>,
     view_path: Option<String>,
+    filter_mask: CategoryMask,
+    dark_mode: bool,
 }
+
 impl Default for ChartUiState {
     fn default() -> Self {
         Self {
@@ -41,15 +50,21 @@ impl Default for ChartUiState {
             selected_path: None,
             context_path: None,
             view_path: None,
+            filter_mask: ALL_CATEGORIES_ENABLED,
+            dark_mode: true,
         }
     }
 }
+
 pub fn run() -> Result<(), slint::PlatformError> {
     setup_language();
     let app = MainWindow::new()?;
-    initialize_ui(&app);
 
     let config = AppConfig::load();
+    let dark_mode = Arc::new(AtomicBool::new(config.dark_mode));
+    app.set_dark_theme_enabled(config.dark_mode);
+    initialize_ui(&app, config.dark_mode);
+
     let default_paths: Vec<PathBuf> = if !config.last_paths.is_empty() {
         log::info!("Loaded {} saved paths from config", config.last_paths.len());
         config.last_paths
@@ -69,14 +84,11 @@ pub fn run() -> Result<(), slint::PlatformError> {
     }
     let cancel_flag = Arc::new(AtomicBool::new(false));
     let scan_running = Arc::new(AtomicBool::new(false));
-    let chart_state = Arc::new(Mutex::new(ChartUiState::default()));
-    connect_path_management(&app, Arc::clone(&selected_paths));
-    let weak_for_sources = app.as_weak();
-    app.on_toggle_sources_requested(move || {
-        if let Some(app) = weak_for_sources.upgrade() {
-            app.set_sources_visible(!app.get_sources_visible());
-        }
-    });
+    let chart_state = Arc::new(Mutex::new(ChartUiState {
+        dark_mode: config.dark_mode,
+        ..ChartUiState::default()
+    }));
+    connect_path_management(&app, Arc::clone(&selected_paths), Arc::clone(&dark_mode));
     connect_scan_actions(
         &app,
         Arc::clone(&selected_paths),
@@ -85,18 +97,32 @@ pub fn run() -> Result<(), slint::PlatformError> {
         Arc::clone(&chart_state),
     );
     connect_chart_interactions(&app, &chart_state);
+    connect_filter_actions(&app, &chart_state);
+    connect_theme_toggle(
+        &app,
+        Arc::clone(&selected_paths),
+        Arc::clone(&dark_mode),
+        Arc::clone(&chart_state),
+    );
+    push_filter_state(
+        &app,
+        &chart_state.lock().expect("chart state poisoned").filter_mask,
+        None,
+    );
     app.run()
 }
-fn initialize_ui(app: &MainWindow) {
+
+fn initialize_ui(app: &MainWindow, dark_mode: bool) {
     app.set_scan_paths(ModelRc::new(VecModel::<ScanPathRow>::default()));
     app.set_top_entries(ModelRc::new(VecModel::<TopEntryRow>::default()));
     app.set_status_text(t!("status-add-paths").into());
     app.set_summary_text(t!("summary-no-results").into());
+    app.set_chart_hover_name("".into());
     app.set_chart_hover_text(t!("hover-hint").into());
     app.set_chart_hover_path("".into());
     app.set_has_results(false);
     app.set_context_menu_visible(false);
-    app.set_chart_image(empty_chart(DEFAULT_RENDER_WIDTH, DEFAULT_RENDER_HEIGHT));
+    app.set_chart_image(empty_chart(DEFAULT_RENDER_WIDTH, DEFAULT_RENDER_HEIGHT, dark_mode));
     app.set_folder_color(Brush::from(FileCategory::Folder.slint_color()));
     app.set_audio_color(Brush::from(FileCategory::Audio.slint_color()));
     app.set_video_color(Brush::from(FileCategory::Video.slint_color()));
@@ -111,36 +137,69 @@ fn initialize_ui(app: &MainWindow) {
 }
 
 fn set_ui_translations(app: &MainWindow) {
-    app.set_tr_sources(t!("ui-sources").into());
-    app.set_tr_hide(t!("ui-hide").into());
-    app.set_tr_show(t!("ui-show").into());
-    app.set_tr_add_folders(t!("ui-add-folders").into());
-    app.set_tr_add_files(t!("ui-add-files").into());
-    app.set_tr_paste_paths(t!("ui-paste-paths").into());
-    app.set_tr_add(t!("ui-add").into());
-    app.set_tr_clear(t!("ui-clear").into());
-    app.set_tr_selected(t!("ui-selected").into());
-    app.set_tr_empty(t!("ui-empty").into());
-    app.set_tr_start(t!("ui-start").into());
-    app.set_tr_stop(t!("ui-stop").into());
-    app.set_tr_visualization(t!("ui-visualization").into());
-    app.set_tr_treemap_desc(t!("ui-treemap-desc").into());
-    app.set_tr_top_files(t!("ui-top-files").into());
-    app.set_tr_after_scan(t!("ui-after-scan").into());
-    app.set_tr_open(t!("ui-open").into());
-    app.set_tr_open_parent(t!("ui-open-parent").into());
-    app.set_tr_scanning(t!("ui-scanning").into());
-    app.set_tr_color_legend(t!("ui-color-legend").into());
-    app.set_tr_mode_scanning(t!("ui-mode-scanning").into());
-    app.set_tr_mode_results(t!("ui-mode-results").into());
-    app.set_tr_mode_waiting(t!("ui-mode-waiting").into());
+    let tr = app.global::<Translations>();
+    tr.set_sources(t!("ui-sources").into());
+    tr.set_hide(t!("ui-hide").into());
+    tr.set_show(t!("ui-show").into());
+    tr.set_add_folders(t!("ui-add-folders").into());
+    tr.set_add_files(t!("ui-add-files").into());
+    tr.set_paste_paths(t!("ui-paste-paths").into());
+    tr.set_add(t!("ui-add").into());
+    tr.set_clear(t!("ui-clear").into());
+    tr.set_selected(t!("ui-selected").into());
+    tr.set_empty(t!("ui-empty").into());
+    tr.set_start(t!("ui-start").into());
+    tr.set_stop(t!("ui-stop").into());
+    tr.set_visualization(t!("ui-visualization").into());
+    tr.set_treemap_desc(t!("ui-treemap-desc").into());
+    tr.set_top_files(t!("ui-top-files").into());
+    tr.set_after_scan(t!("ui-after-scan").into());
+    tr.set_open(t!("ui-open").into());
+    tr.set_open_parent(t!("ui-open-parent").into());
+    tr.set_scanning(t!("ui-scanning").into());
+    tr.set_color_legend(t!("ui-color-legend").into());
+    tr.set_mode_scanning(t!("ui-mode-scanning").into());
+    tr.set_mode_results(t!("ui-mode-results").into());
+    tr.set_mode_waiting(t!("ui-mode-waiting").into());
+    tr.set_filter_reset(t!("ui-filter-reset").into());
+    tr.set_filter_clear(t!("ui-filter-clear").into());
+    tr.set_filter_empty(t!("ui-filter-empty").into());
+    tr.set_cat_audio(t!("cat-audio").into());
+    tr.set_cat_video(t!("cat-video").into());
+    tr.set_cat_image(t!("cat-image").into());
+    tr.set_cat_archive(t!("cat-archive").into());
+    tr.set_cat_document(t!("cat-document").into());
+    tr.set_cat_code(t!("cat-code").into());
+    tr.set_cat_disk_image(t!("cat-disk-image").into());
+    tr.set_cat_binary(t!("cat-binary").into());
+    tr.set_cat_other(t!("cat-other").into());
 }
-fn connect_path_management(app: &MainWindow, selected_paths: Arc<Mutex<Vec<PathBuf>>>) {
+
+/// Maps the Slint `Category` enum to the corresponding `filter_mask` index.
+/// Order must match `FileCategory::index()` in model.rs.
+fn category_mask_index(category: Category) -> usize {
+    match category {
+        Category::Folder => 0,
+        Category::Audio => 1,
+        Category::Video => 2,
+        Category::Image => 3,
+        Category::Archive => 4,
+        Category::Document => 5,
+        Category::Code => 6,
+        Category::DiskImage => 7,
+        Category::Binary => 8,
+        Category::Other => 9,
+    }
+}
+
+fn connect_path_management(app: &MainWindow, selected_paths: Arc<Mutex<Vec<PathBuf>>>, dark_mode: Arc<AtomicBool>) {
     let weak = app.as_weak();
     let selected_paths_for_folders = Arc::clone(&selected_paths);
+    let dark_mode_folders = Arc::clone(&dark_mode);
     app.on_add_folders_requested(move || {
         let weak = weak.clone();
         let selected_paths = Arc::clone(&selected_paths_for_folders);
+        let dark_mode = Arc::clone(&dark_mode_folders);
         std::thread::spawn(move || {
             let start_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"));
             if let Some(folders) = FileDialog::new().set_directory(start_dir).pick_folders() {
@@ -149,11 +208,13 @@ fn connect_path_management(app: &MainWindow, selected_paths: Arc<Mutex<Vec<PathB
                     merge_paths(&mut guard, folders);
                     guard.clone()
                 };
+                let dark = dark_mode.load(Ordering::Relaxed);
                 let _ = weak.upgrade_in_event_loop(move |app| {
                     refresh_paths_model(&app, &snapshot);
                     app.set_status_text(t!("status-paths-selected", count = snapshot.len()).into());
                     AppConfig {
                         last_paths: snapshot.clone(),
+                        dark_mode: dark,
                     }
                     .save();
                     log::info!("Paths updated: {} total", snapshot.len());
@@ -163,9 +224,11 @@ fn connect_path_management(app: &MainWindow, selected_paths: Arc<Mutex<Vec<PathB
     });
     let weak = app.as_weak();
     let selected_paths_for_files = Arc::clone(&selected_paths);
+    let dark_mode_files = Arc::clone(&dark_mode);
     app.on_add_files_requested(move || {
         let weak = weak.clone();
         let selected_paths = Arc::clone(&selected_paths_for_files);
+        let dark_mode = Arc::clone(&dark_mode_files);
         std::thread::spawn(move || {
             let start_dir = std::env::current_dir().unwrap_or_else(|_| PathBuf::from("/"));
             if let Some(files) = FileDialog::new().set_directory(start_dir).pick_files() {
@@ -174,11 +237,13 @@ fn connect_path_management(app: &MainWindow, selected_paths: Arc<Mutex<Vec<PathB
                     merge_paths(&mut guard, files);
                     guard.clone()
                 };
+                let dark = dark_mode.load(Ordering::Relaxed);
                 let _ = weak.upgrade_in_event_loop(move |app| {
                     refresh_paths_model(&app, &snapshot);
                     app.set_status_text(t!("status-paths-selected", count = snapshot.len()).into());
                     AppConfig {
                         last_paths: snapshot.clone(),
+                        dark_mode: dark,
                     }
                     .save();
                     log::info!("Paths updated: {} total", snapshot.len());
@@ -188,6 +253,7 @@ fn connect_path_management(app: &MainWindow, selected_paths: Arc<Mutex<Vec<PathB
     });
     let weak = app.as_weak();
     let selected_paths_for_manual = Arc::clone(&selected_paths);
+    let dark_mode_manual = Arc::clone(&dark_mode);
     app.on_apply_manual_paths(move |manual_input| {
         let manual_paths = manual_input
             .lines()
@@ -207,11 +273,16 @@ fn connect_path_management(app: &MainWindow, selected_paths: Arc<Mutex<Vec<PathB
             refresh_paths_model(&app, &snapshot);
             app.set_manual_paths(SharedString::new());
             app.set_status_text(t!("status-paths-manual", count = snapshot.len()).into());
-            AppConfig { last_paths: snapshot }.save();
+            AppConfig {
+                last_paths: snapshot,
+                dark_mode: dark_mode_manual.load(Ordering::Relaxed),
+            }
+            .save();
         }
     });
     let weak = app.as_weak();
     let selected_paths_for_remove = Arc::clone(&selected_paths);
+    let dark_mode_remove = Arc::clone(&dark_mode);
     app.on_remove_path_requested(move |index| {
         let snapshot = {
             let mut guard = selected_paths_for_remove.lock().expect("selected paths poisoned");
@@ -228,7 +299,41 @@ fn connect_path_management(app: &MainWindow, selected_paths: Arc<Mutex<Vec<PathB
                 t!("status-paths-remaining", count = snapshot.len())
             };
             app.set_status_text(status.into());
-            AppConfig { last_paths: snapshot }.save();
+            AppConfig {
+                last_paths: snapshot,
+                dark_mode: dark_mode_remove.load(Ordering::Relaxed),
+            }
+            .save();
+        }
+    });
+    let weak = app.as_weak();
+    let selected_paths_for_dbl = Arc::clone(&selected_paths);
+    app.on_path_double_clicked(move |index| {
+        let target = {
+            let guard = selected_paths_for_dbl.lock().expect("selected paths poisoned");
+            usize::try_from(index).ok().and_then(|i| guard.get(i).cloned())
+        };
+        if let Some(path) = target
+            && let Err(e) = open::that(&path)
+            && let Some(app) = weak.upgrade()
+        {
+            app.set_status_text(t!("status-open-failed", error = e.to_string()).into());
+        }
+    });
+    let weak = app.as_weak();
+    let selected_paths_for_right = Arc::clone(&selected_paths);
+    app.on_path_right_clicked(move |index| {
+        let target = {
+            let guard = selected_paths_for_right.lock().expect("selected paths poisoned");
+            usize::try_from(index).ok().and_then(|i| guard.get(i).cloned())
+        };
+        if let Some(path) = target {
+            let parent = path.parent().unwrap_or(path.as_path()).to_path_buf();
+            if let Err(e) = open::that(&parent)
+                && let Some(app) = weak.upgrade()
+            {
+                app.set_status_text(t!("status-open-failed", error = e.to_string()).into());
+            }
         }
     });
     let weak = app.as_weak();
@@ -239,11 +344,42 @@ fn connect_path_management(app: &MainWindow, selected_paths: Arc<Mutex<Vec<PathB
         if let Some(app) = weak.upgrade() {
             refresh_paths_model(&app, &[]);
             app.set_status_text(t!("status-paths-cleared").into());
-            AppConfig { last_paths: vec![] }.save();
+            AppConfig {
+                last_paths: vec![],
+                dark_mode: dark_mode.load(Ordering::Relaxed),
+            }
+            .save();
             log::info!("Path list cleared");
         }
     });
 }
+
+fn connect_theme_toggle(
+    app: &MainWindow,
+    selected_paths: Arc<Mutex<Vec<PathBuf>>>,
+    dark_mode: Arc<AtomicBool>,
+    chart_state: Arc<Mutex<ChartUiState>>,
+) {
+    let weak = app.as_weak();
+    app.on_toggle_dark_mode(move || {
+        let new_dark = !dark_mode.load(Ordering::Relaxed);
+        dark_mode.store(new_dark, Ordering::Relaxed);
+        if let Ok(mut state) = chart_state.lock() {
+            state.dark_mode = new_dark;
+        }
+        let paths = selected_paths.lock().map(|g| g.clone()).unwrap_or_default();
+        AppConfig {
+            last_paths: paths,
+            dark_mode: new_dark,
+        }
+        .save();
+        if let Some(app) = weak.upgrade() {
+            app.set_dark_theme_enabled(new_dark);
+            refresh_chart_view(&app, &chart_state);
+        }
+    });
+}
+
 fn connect_scan_actions(
     app: &MainWindow,
     selected_paths: Arc<Mutex<Vec<PathBuf>>>,
@@ -277,16 +413,17 @@ fn connect_scan_actions(
             state.context_path = None;
             state.view_path = None;
         }
+        let dark = chart_state.lock().map_or(true, |s| s.dark_mode);
         if let Some(app) = weak.upgrade() {
             app.set_scanning(true);
-            app.set_sources_visible(false);
             app.set_has_results(false);
             app.set_summary_text(t!("status-scanning-progress").into());
+            app.set_chart_hover_name("".into());
             app.set_chart_hover_text(t!("hover-hint").into());
             app.set_chart_hover_path("".into());
             app.set_context_menu_visible(false);
             app.set_top_entries(ModelRc::new(VecModel::<TopEntryRow>::default()));
-            app.set_chart_image(empty_chart(DEFAULT_RENDER_WIDTH, DEFAULT_RENDER_HEIGHT));
+            app.set_chart_image(empty_chart(DEFAULT_RENDER_WIDTH, DEFAULT_RENDER_HEIGHT, dark));
             app.set_status_text(t!("status-scanning", count = 0u64).into());
         }
         let scanned_counter = Arc::new(AtomicU64::new(0));
@@ -334,6 +471,7 @@ fn connect_scan_actions(
         });
     });
 }
+
 fn connect_chart_interactions(app: &MainWindow, chart_state: &Arc<Mutex<ChartUiState>>) {
     let weak = app.as_weak();
     let chart_state_resize = Arc::clone(chart_state);
@@ -360,10 +498,12 @@ fn connect_chart_interactions(app: &MainWindow, chart_state: &Arc<Mutex<ChartUiS
             let mut should_refresh = false;
             if let Ok(mut state) = chart_state_hover.lock() {
                 let new_hover = if let Some(hit) = state.hit_map.hit_test(x, y) {
-                    app.set_chart_hover_text(hit.line1().into());
+                    app.set_chart_hover_name(hit.display.clone().into());
+                    app.set_chart_hover_text(hit.meta_line().into());
                     app.set_chart_hover_path(hit.path.clone().into());
                     Some(hit.path)
                 } else {
+                    app.set_chart_hover_name("".into());
                     app.set_chart_hover_text(t!("hover-hint").into());
                     app.set_chart_hover_path("".into());
                     None
@@ -388,9 +528,11 @@ fn connect_chart_interactions(app: &MainWindow, chart_state: &Arc<Mutex<ChartUiS
                 let hit = state.hit_map.hit_test(x, y);
                 let new_path = hit.as_ref().map(|h| h.path.clone());
                 if let Some(ref h) = hit {
-                    app.set_chart_hover_text(h.line1().into());
+                    app.set_chart_hover_name(h.display.clone().into());
+                    app.set_chart_hover_text(h.meta_line().into());
                     app.set_chart_hover_path(h.path.clone().into());
                 } else {
+                    app.set_chart_hover_name("".into());
                     app.set_chart_hover_text(t!("hover-hint").into());
                     app.set_chart_hover_path("".into());
                 }
@@ -429,7 +571,8 @@ fn connect_chart_interactions(app: &MainWindow, chart_state: &Arc<Mutex<ChartUiS
                     app.set_context_menu_x(x);
                     app.set_context_menu_y(y);
                     app.set_context_menu_visible(true);
-                    app.set_chart_hover_text(hit.line1().into());
+                    app.set_chart_hover_name(hit.display.clone().into());
+                    app.set_chart_hover_text(hit.meta_line().into());
                     app.set_chart_hover_path(hit.path.into());
                 } else {
                     // Clear hover and context when right-clicking empty space.
@@ -439,6 +582,7 @@ fn connect_chart_interactions(app: &MainWindow, chart_state: &Arc<Mutex<ChartUiS
                     }
                     state.context_path = None;
                     app.set_context_menu_visible(false);
+                    app.set_chart_hover_name("".into());
                     app.set_chart_hover_text(t!("hover-hint").into());
                     app.set_chart_hover_path("".into());
                 }
@@ -454,57 +598,38 @@ fn connect_chart_interactions(app: &MainWindow, chart_state: &Arc<Mutex<ChartUiS
             app.set_context_menu_visible(false);
         }
     });
-    // Scroll up = drill down toward selected path.
     let weak = app.as_weak();
-    let chart_state_scroll_up = Arc::clone(chart_state);
-    app.on_chart_scroll_up(move || {
-        let new_view = {
-            if let Ok(state) = chart_state_scroll_up.lock() {
-                if let Some(ref selected) = state.selected_path {
+    let chart_state_scroll = Arc::clone(chart_state);
+    app.on_chart_scrolled(move |direction| {
+        let new_view = if let Ok(state) = chart_state_scroll.lock() {
+            match direction {
+                ScrollDirection::Up => {
+                    let Some(ref selected) = state.selected_path else {
+                        return;
+                    };
                     next_view_path_toward(state.view_path.as_deref(), selected, state.tree.as_deref())
-                } else {
-                    return;
                 }
-            } else {
-                return;
-            }
-        };
-        if let Ok(mut state) = chart_state_scroll_up.lock() {
-            if state.view_path == new_view {
-                return;
-            }
-            state.view_path = new_view;
-        }
-        if let Some(app) = weak.upgrade() {
-            refresh_chart_view(&app, &Arc::clone(&chart_state_scroll_up));
-            if let Ok(state) = chart_state_scroll_up.lock()
-                && let Some(ref vp) = state.view_path
-            {
-                app.set_status_text(t!("status-view", path = vp.clone()).into());
-            }
-        }
-    });
-    // Scroll down = zoom out (go to parent folder).
-    let weak = app.as_weak();
-    let chart_state_scroll_down = Arc::clone(chart_state);
-    app.on_chart_scroll_down(move || {
-        let new_view = {
-            if let Ok(state) = chart_state_scroll_down.lock() {
-                if let Some(ref vp) = state.view_path {
+                ScrollDirection::Down => {
+                    let Some(ref vp) = state.view_path else { return };
                     prev_view_path(vp)
-                } else {
-                    return; // already at root
                 }
-            } else {
+            }
+        } else {
+            return;
+        };
+        // Drill-down: skip refresh when the view didn't actually change.
+        if matches!(direction, ScrollDirection::Up) {
+            let current = chart_state_scroll.lock().ok().and_then(|s| s.view_path.clone());
+            if current == new_view {
                 return;
             }
-        };
-        if let Ok(mut state) = chart_state_scroll_down.lock() {
+        }
+        if let Ok(mut state) = chart_state_scroll.lock() {
             state.view_path = new_view;
         }
         if let Some(app) = weak.upgrade() {
-            refresh_chart_view(&app, &Arc::clone(&chart_state_scroll_down));
-            if let Ok(state) = chart_state_scroll_down.lock() {
+            refresh_chart_view(&app, &Arc::clone(&chart_state_scroll));
+            if let Ok(state) = chart_state_scroll.lock() {
                 let status = match &state.view_path {
                     Some(p) => t!("status-view", path = p.clone()),
                     None => t!("status-view-root"),
@@ -515,13 +640,14 @@ fn connect_chart_interactions(app: &MainWindow, chart_state: &Arc<Mutex<ChartUiS
     });
     let weak = app.as_weak();
     let chart_state_open = Arc::clone(chart_state);
-    app.on_open_item_requested(move |open_parent| {
+    app.on_open_item_requested(move |target| {
         if let Some(app) = weak.upgrade() {
-            let target = chart_state_open
+            let path = chart_state_open
                 .lock()
                 .ok()
                 .and_then(|state| state.context_path.clone());
-            if let Some(path) = target {
+            if let Some(path) = path {
+                let open_parent = matches!(target, OpenTarget::Parent);
                 match open_path_target(&path, open_parent) {
                     Ok(()) => {
                         app.set_status_text(
@@ -556,28 +682,118 @@ fn connect_chart_interactions(app: &MainWindow, chart_state: &Arc<Mutex<ChartUiS
         }
     });
 }
+
 fn refresh_result_views(app: &MainWindow, chart_state: &Arc<Mutex<ChartUiState>>) {
-    let tree = {
+    let (tree, mask) = {
         let state = chart_state.lock().expect("chart state poisoned");
         let Some(tree) = state.tree.as_ref() else {
             app.set_has_results(false);
             return;
         };
-        Arc::clone(tree)
+        (Arc::clone(tree), state.filter_mask)
     };
     let top_rows = tree
-        .top_entries(32)
+        .top_entries_filtered(32, &mask)
         .into_iter()
         .map(top_entry_to_row)
         .collect::<Vec<_>>();
     app.set_has_results(!tree.is_empty());
     app.set_summary_text(summary_text(&tree).into());
     app.set_top_entries(Rc::new(VecModel::from(top_rows)).into());
+    push_filter_state(app, &mask, Some(&tree));
+    refresh_chart_view(app, chart_state);
+}
+
+fn push_filter_state(app: &MainWindow, mask: &CategoryMask, tree: Option<&ScanTree>) {
+    app.set_cat_folder_enabled(mask[0]);
+    app.set_cat_audio_enabled(mask[1]);
+    app.set_cat_video_enabled(mask[2]);
+    app.set_cat_image_enabled(mask[3]);
+    app.set_cat_archive_enabled(mask[4]);
+    app.set_cat_document_enabled(mask[5]);
+    app.set_cat_code_enabled(mask[6]);
+    app.set_cat_disk_image_enabled(mask[7]);
+    app.set_cat_binary_enabled(mask[8]);
+    app.set_cat_other_enabled(mask[9]);
+    let active = !mask_all_enabled(mask);
+    app.set_filter_active(active);
+    let summary = if mask_none_enabled(mask) {
+        t!("ui-filter-empty")
+    } else if let Some(tree) = tree {
+        let (size, count) = filter_stats(tree, mask);
+        if active {
+            t!("ui-filter-summary", size = format_bytes(size), count = count)
+        } else {
+            t!("ui-filter-total", size = format_bytes(size), count = count)
+        }
+    } else {
+        String::new()
+    };
+    app.set_filter_summary(summary.into());
+}
+
+fn connect_filter_actions(app: &MainWindow, chart_state: &Arc<Mutex<ChartUiState>>) {
+    let weak = app.as_weak();
+    let cs = Arc::clone(chart_state);
+    app.on_toggle_category(move |category| {
+        let idx = category_mask_index(category);
+        let new_mask = {
+            let mut state = cs.lock().expect("chart state poisoned");
+            state.filter_mask[idx] = !state.filter_mask[idx];
+            state.filter_mask
+        };
+        if let Some(app) = weak.upgrade() {
+            let tree = cs.lock().ok().and_then(|s| s.tree.clone());
+            push_filter_state(&app, &new_mask, tree.as_deref());
+            refresh_filter_dependent_views(&app, &cs);
+        }
+    });
+    let weak = app.as_weak();
+    let cs = Arc::clone(chart_state);
+    app.on_filter_reset(move || {
+        let new_mask = ALL_CATEGORIES_ENABLED;
+        if let Ok(mut state) = cs.lock() {
+            state.filter_mask = new_mask;
+        }
+        if let Some(app) = weak.upgrade() {
+            let tree = cs.lock().ok().and_then(|s| s.tree.clone());
+            push_filter_state(&app, &new_mask, tree.as_deref());
+            refresh_filter_dependent_views(&app, &cs);
+        }
+    });
+    let weak = app.as_weak();
+    let cs = Arc::clone(chart_state);
+    app.on_filter_clear(move || {
+        let new_mask = [false; CATEGORY_COUNT];
+        if let Ok(mut state) = cs.lock() {
+            state.filter_mask = new_mask;
+        }
+        if let Some(app) = weak.upgrade() {
+            let tree = cs.lock().ok().and_then(|s| s.tree.clone());
+            push_filter_state(&app, &new_mask, tree.as_deref());
+            refresh_filter_dependent_views(&app, &cs);
+        }
+    });
+}
+
+fn refresh_filter_dependent_views(app: &MainWindow, chart_state: &Arc<Mutex<ChartUiState>>) {
+    let (tree_opt, mask) = {
+        let state = chart_state.lock().expect("chart state poisoned");
+        (state.tree.clone(), state.filter_mask)
+    };
+    if let Some(tree) = tree_opt {
+        let top_rows = tree
+            .top_entries_filtered(32, &mask)
+            .into_iter()
+            .map(top_entry_to_row)
+            .collect::<Vec<_>>();
+        app.set_top_entries(Rc::new(VecModel::from(top_rows)).into());
+    }
     refresh_chart_view(app, chart_state);
 }
 
 fn refresh_chart_view(app: &MainWindow, chart_state: &Arc<Mutex<ChartUiState>>) {
-    let (tree, width, height, hovered_path, selected_path, view_path) = {
+    let (tree, width, height, hovered_path, selected_path, view_path, mask, dark_mode) = {
         let state = chart_state.lock().expect("chart state poisoned");
         let Some(tree) = state.tree.as_ref() else {
             app.set_has_results(false);
@@ -590,6 +806,8 @@ fn refresh_chart_view(app: &MainWindow, chart_state: &Arc<Mutex<ChartUiState>>) 
             state.hovered_path.clone(),
             state.selected_path.clone(),
             state.view_path.clone(),
+            state.filter_mask,
+            state.dark_mode,
         )
     };
     app.set_has_results(!tree.is_empty());
@@ -600,12 +818,15 @@ fn refresh_chart_view(app: &MainWindow, chart_state: &Arc<Mutex<ChartUiState>>) 
         hovered_path.as_deref(),
         selected_path.as_deref(),
         view_path.as_deref(),
+        &mask,
+        dark_mode,
     );
     if let Ok(mut state) = chart_state.lock() {
         state.hit_map = rendered.hit_map;
     }
     app.set_chart_image(rendered.image);
 }
+
 fn open_path_target(path: &str, open_parent: bool) -> Result<(), String> {
     let base = Path::new(path);
     let target = if open_parent {
@@ -615,6 +836,7 @@ fn open_path_target(path: &str, open_parent: bool) -> Result<(), String> {
     };
     open::that(target).map_err(|error| error.to_string())
 }
+
 fn refresh_paths_model(app: &MainWindow, paths: &[PathBuf]) {
     let rows = paths
         .iter()
@@ -625,6 +847,7 @@ fn refresh_paths_model(app: &MainWindow, paths: &[PathBuf]) {
         .collect::<Vec<_>>();
     app.set_scan_paths(Rc::new(VecModel::from(rows)).into());
 }
+
 fn top_entry_to_row(entry: TopEntry) -> TopEntryRow {
     let name = std::path::Path::new(&entry.path)
         .file_name()
@@ -636,6 +859,7 @@ fn top_entry_to_row(entry: TopEntry) -> TopEntryRow {
         meta: entry.category.label().into(),
     }
 }
+
 fn summary_text(tree: &ScanTree) -> String {
     let size = format_bytes(tree.total_size);
     if tree.canceled {
