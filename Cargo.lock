@@ -4711,7 +4711,7 @@ dependencies = [
 
 [[package]]
 name = "space_finder"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "dirs",
  "handsome_logger",

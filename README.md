@@ -37,7 +37,10 @@ cargo build --release
 
 ## License
 
-MIT
+GPL-3.0 - project as a whole is licensed under this license due to Slint licensing requirements.
+
+MIT - the source code itself is licensed under this license.
+
 
 ---
 
