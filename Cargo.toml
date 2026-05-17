@@ -1,8 +1,13 @@
 [package]
 name = "space_finder"
 version = "1.0.0"
+authors = ["Rafał Mikrut <mikrutrafal@protonmail.com>"]
 edition = "2024"
 build = "build.rs"
+description = "Tool to find and visualize the largest files and folders on your disk"
+license = "MIT"
+homepage = "https://github.com/qarmin/space_finder"
+repository = "https://github.com/qarmin/space_finder"
 
 [dependencies]
 image = { version = "0.25", default-features = false }
